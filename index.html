@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Winter Arc</title>
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#000000"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><link rel="apple-touch-icon" href="icon-192.png">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#000;--card:#111;--line:#262626;--tx:#fafafa;--mu:#8a8a8a}
+:root:not([data-theme="light"]){color-scheme:dark}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 -apple-system,"Inter","Helvetica Neue",Arial,sans-serif;max-width:720px;margin:auto;padding:16px}
+h1{font-size:22px;letter-spacing:.2em;margin:8px 0 2px}h2{font-size:12px;letter-spacing:.15em;color:var(--mu);text-transform:uppercase;margin:24px 0 8px;font-weight:600}
+.sub{color:var(--mu);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:10px 0}
+nav{display:flex;gap:6px;margin:14px 0;position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);padding:6px 0;z-index:5}
+nav button{flex:1}
+button,input,textarea{font:inherit;color:var(--tx);background:#0b0b0b;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+button{cursor:pointer}button.on,button.pri{background:#fafafa;color:#000;font-weight:600;border-color:#fafafa}
+button.pri{width:100%;padding:14px;font-size:16px;margin-top:8px}
+input,textarea{width:100%}label{display:block;font-size:12px;color:var(--mu);margin:10px 0 4px}
+.row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}.row:last-child{border:0}
+.bar{font-family:ui-monospace,Menlo,monospace;letter-spacing:-1px;color:#fafafa}
+.big{font-size:56px;font-weight:700;line-height:1}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat{background:#0b0b0b;border:1px solid var(--line);border-radius:10px;padding:10px}.stat b{display:block;font-size:20px}.stat span{font-size:11px;color:var(--mu)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}.cal div{padding:6px 0;border-radius:8px;background:#0b0b0b;border:1px solid var(--line);font-size:12px;cursor:pointer}
+.cal .h{background:none;border:0;color:var(--mu);cursor:default}.cal small{display:block;color:var(--mu);font-size:10px}
+.scroll{overflow-x:auto}table{border-collapse:collapse;font-size:12px;white-space:nowrap}td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left}th{color:var(--mu);font-weight:500}tr.c{cursor:pointer}
+.hide{display:none}.ctl{display:flex;gap:8px;align-items:center}.ctl input{flex:1}
+</style></head><body>
+<h1>WINTER ARC ❄️</h1><div class="sub" id="sync"></div>
+<nav><button data-t="today" class="on">Today</button><button data-t="month">Month</button><button data-t="log">Log</button><button data-t="table">Days</button></nav>
+<div id="v"></div>
+<script>
+// ===== CONFIG =====
+const T={study:[3,4],content:[2,3],run:[3,4],biz:[3,4],ideas:3,scroll:15,waste:15}; // [min target, display target]
+const W={study:25,content:20,run:15,biz:25,ideas:5,scroll:5,waste:5};
+const CAT=[["study","Study","h"],["content","Content","h"],["run","Running","km"],["biz","Business","h"],["scroll","Low Scrolling",""]];
+let D={},tab="today",sel=null,mon=null,uid=null,col=null;
+const $=s=>document.querySelector(s),pad=n=>String(n).padStart(2,"0");
+const ymd=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+const today=()=>ymd(new Date());const num=v=>Math.max(0,parseFloat(v)||0);
+const f1=n=>(Math.round(n*10)/10).toString();const esc=s=>String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const DN=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+function score(r){if(!r)return 0;const p=(v,t)=>Math.min(1,v/t);
+ return Math.round(W.study*p(r.study,T.study[0])+W.content*p(r.content,T.content[0])+W.run*p(r.run,T.run[0])+W.biz*p(r.biz,T.biz[0])+W.ideas*p(r.ideas,T.ideas)+W.scroll*Math.max(0,1-r.scroll/60)+W.waste*Math.max(0,1-r.waste/60));}
+const status=s=>s>=90?"Excellent Day":s>=75?"Strong Day":s>=60?"Decent Day":s>=40?"Needs Improvement":"Poor Day";
+function lamp(k,r){const v=r[k],t=T[k];if(k=="scroll"||k=="waste")return v<=t?"🟢":v<=60?"🟡":"🔴";
+ const m=Array.isArray(t)?t[0]:t;return v>=m?"🟢":v>=m/2?"🟡":"🔴";}
+const mark=(k,r)=>lamp(k,r)=="🟢"?"✅":"❌";
+function bar(p){p=Math.max(0,Math.min(100,p));const n=Math.round(p/100*17);return "█".repeat(n)+"░".repeat(17-n)}
+function norm(o){return{study:num(o.study),content:num(o.content),shoot:!!o.shoot,edit:!!o.edit,run:num(o.run),biz:num(o.biz),ideas:Math.floor(num(o.ideas)),scroll:num(o.scroll),waste:num(o.waste),notes:o.notes||""}}
+// ===== STORAGE (private db when signed in; localStorage mirror always) =====
+function lsLoad(){try{return JSON.parse(localStorage.getItem("wa_days")||"{}")}catch(e){return{}}}
+function lsSave(){try{localStorage.setItem("wa_days",JSON.stringify(D))}catch(e){}}
+async function save(date,rec){D[date]=rec;lsSave();if(col){try{await col.doc(date).set(rec)}catch(e){$("#sync").textContent="Saved on this device only (cloud save failed)"}}render()}
+async function init(){D=lsLoad();render();
+ try{const c=await claude.use("db"),u=await claude.use("user");if(c&&u){uid=await u.id();if(uid){col=c.collection("data/users/"+uid+"/days");
+  col.onSnapshot(s=>{const cloud={};s.docs.forEach(d=>cloud[d.id]=d.data());
+   Object.keys(D).forEach(k=>{if(!cloud[k]&&col)col.doc(k).set(D[k]).catch(()=>{})});// push local-only days up
+   D=Object.assign({},D,cloud);lsSave();$("#sync").textContent="Saved to your account ✓";render()},()=>{});return}}}catch(e){}
+ $("#sync").textContent="Saved on this device"}
+// ===== STATS =====
+const dim=(y,m)=>new Date(y,m+1,0).getDate();
+function monthStats(key){const [y,m]=key.split("-").map(Number),n=dim(y,m-1),t=today();
+ const days=[];for(let d=1;d<=n;d++){const k=key+"-"+pad(d);days.push({k,d,r:D[k],future:k>t})}
+ const el=days.filter(x=>!x.future),lg=el.filter(x=>x.r),L=lg.length,E=el.length||1;
+ const sum=f=>lg.reduce((a,x)=>a+f(x.r),0),sc=lg.map(x=>score(x.r));
+ const hab={};CAT.forEach(([k])=>hab[k]=Math.round(100*lg.filter(x=>lamp(k,x.r)=="🟢").length/E));
+ const out=sum(r=>r.study+r.content+r.biz);
+ return{key,days,E,L,tot:{study:sum(r=>r.study),content:sum(r=>r.content),run:sum(r=>r.run),biz:sum(r=>r.biz),ideas:sum(r=>r.ideas),scroll:sum(r=>r.scroll),waste:sum(r=>r.waste)},
+  avgScore:Math.round(sc.reduce((a,b)=>a+b,0)/E),exc:sc.filter(s=>s>=90).length,strong:sc.filter(s=>s>=75&&s<90).length,
+  missed:E-L,hab,tach:Math.round(CAT.reduce((a,[k])=>a+hab[k],0)/CAT.length),out,done:lg.filter(x=>score(x.r)>=70).length}}
+function streaks(){const ks=Object.keys(D).sort();if(!ks.length)return[0,0];let best=0,run=0,prev=null;
+ const all=[];let d=new Date(ks[0]+"T00:00");const end=new Date();while(d<=end){all.push(ymd(d));d.setDate(d.getDate()+1)}
+ all.forEach(k=>{if(D[k]&&score(D[k])>=70){run++;best=Math.max(best,run)}else run=0});
+ let cur=0;for(let i=all.length-1;i>=0;i--){const ok=D[all[i]]&&score(D[all[i]])>=70;if(ok)cur++;else if(i==all.length-1)continue;else break}
+ return[cur,best]}
+function mstreak(s){let b=0,r=0;s.days.forEach(x=>{if(x.r&&score(x.r)>=70){r++;b=Math.max(b,r)}else r=0});return b}
+// ===== VIEWS =====
+const stat=(a,b)=>`<div class="stat"><b>${b}</b><span>${a}</span></div>`;
+function viewToday(){const k=today(),r=D[k]||norm({}),s=score(r);
+ const row=(n,v,t)=>`<div class="row"><span>${n}</span><span>${f1(v)} / ${t}</span></div>`;
+ return `<div class="sub">${DN[new Date().getDay()]}, ${k}</div><div class="card"><h2 style="margin-top:0">Today's Progress</h2>
+ ${row("Study",r.study,T.study[1]+"h")}${row("Content",r.content,T.content[1]+"h")}${row("Running",r.run,T.run[1]+" KM")}${row("Business",r.biz,T.biz[1]+"h")}
+ <div class="row"><span>Ideas</span><span>${r.ideas}</span></div><div class="row"><span>Scrolling</span><span>${r.scroll} min</span></div></div>
+ <div class="card"><h2 style="margin-top:0">Daily Score</h2><div class="big">${s}<span class="sub"> / 100</span></div><div class="sub">${D[k]?status(s):"Not logged yet"}</div></div>
+ <button class="pri" onclick="openLog('${k}')">${D[k]?"✎ Edit Today's Record":"+ Add Today's Record"}</button>`}
+function viewLog(){const k=sel||today(),r=D[k]||norm({}),s=score(r);
+ const inp=(id,l,v,st)=>`<label>${l}</label><input id="${id}" type="number" inputmode="decimal" step="${st||"any"}" min="0" value="${v||""}" placeholder="0" oninput="live()">`;
+ return `<h2>${D[k]?"Edit record":"Add record"}</h2><div class="ctl"><input type="date" id="dt" value="${k}" max="${today()}" onchange="sel=this.value;render()"></div>
+ <div class="card">${inp("study","Study (hours)",r.study)}${inp("content","Content work (hours)",r.content)}
+ <label><input type="checkbox" id="shoot" ${r.shoot?"checked":""} style="width:auto"> Video shoot completed</label><label><input type="checkbox" id="edit" ${r.edit?"checked":""} style="width:auto"> Video editing completed</label>
+ ${inp("run","Running (KM)",r.run)}${inp("biz","Business (hours)",r.biz)}${inp("ideas","Content ideas created",r.ideas,1)}${inp("scroll","Scrolling (minutes)",r.scroll)}${inp("waste","Other time waste (minutes)",r.waste)}
+ <label>Notes</label><textarea id="notes" rows="3">${esc(r.notes)}</textarea></div>
+ <div class="card" id="pv"></div><button class="pri" onclick="doSave()">Save ${k}</button>`+""}
+function read(){return norm({study:$("#study").value,content:$("#content").value,shoot:$("#shoot").checked,edit:$("#edit").checked,run:$("#run").value,biz:$("#biz").value,ideas:$("#ideas").value,scroll:$("#scroll").value,waste:$("#waste").value,notes:$("#notes").value})}
+function live(){const r=read(),s=score(r),L={study:"Study",content:"Content",run:"Run",biz:"Biz",ideas:"Ideas",scroll:"Scroll",waste:"Waste"};
+ $("#pv").innerHTML=`<div class="sub">${Object.keys(L).map(k=>L[k]+" "+lamp(k,r)).join(" · ")}</div><div class="big" style="margin-top:8px">${s}<span class="sub"> / 100 · ${status(s)}</span></div>`}
+async function doSave(){const k=$("#dt").value||today();await save(k,read());sel=null;go("today")}
+function openLog(k){sel=k;go("log")}
+function viewTable(){const ks=Object.keys(D).sort().reverse();if(!ks.length)return `<div class="card sub">No records yet.</div>`;
+ return `<h2>All days (tap to edit)</h2><div class="scroll"><table><tr>${["Date","Day","Study h","Study target","Study ✓","Content h","Shoot","Edit","Run KM","Run target","Biz h","Ideas","Scroll min","Waste min","Score","Notes"].map(h=>`<th>${h}</th>`).join("")}</tr>
+ ${ks.map(k=>{const r=D[k],s=score(r);return `<tr class="c" onclick="openLog('${k}')"><td>${k}</td><td>${DN[new Date(k+"T00:00").getDay()]}</td><td>${f1(r.study)}</td><td>3–4</td><td>${mark("study",r)}</td><td>${f1(r.content)}</td><td>${r.shoot?"✅":"❌"}</td><td>${r.edit?"✅":"❌"}</td><td>${f1(r.run)}</td><td>3–4</td><td>${f1(r.biz)}</td><td>${r.ideas}</td><td>${r.scroll}</td><td>${r.waste}</td><td>${s} ${lamp("study",{study:s>=75?1:0,0:0})&&""}</td><td>${esc(r.notes)}</td></tr>`}).join("")}</table></div>`}
+function viewMonth(){const key=mon||today().slice(0,7),S=monthStats(key),[y,m]=key.split("-").map(Number),A=S.E,av=v=>f1(v/A);
+ const nm=new Date(y,m-1,1).toLocaleString("en",{month:"long",year:"numeric"}),[cs,bs]=streaks();
+ const shift=d=>{const x=new Date(y,m-1+d,1);return x.getFullYear()+"-"+pad(x.getMonth()+1)};
+ const first=new Date(y,m-1,1).getDay();
+ let cal=DN.map(d=>`<div class="h">${d[0]}</div>`).join("")+"<div style='visibility:hidden'></div>".repeat(first);
+ S.days.forEach(x=>{let e="⚪";if(!x.future){const s=x.r?score(x.r):-1;e=s>=75?"🟢":s>=40?"🟡":"🔴"}cal+=`<div onclick="openLog('${x.k}')">${x.d}<small>${e}</small></div>`});
+ let wk="";for(let i=0;i<S.days.length;i+=7){const w=S.days.slice(i,i+7),lg=w.filter(x=>x.r);if(!lg.length&&w[0].future)break;const sm=f=>lg.reduce((a,x)=>a+f(x.r),0),el=w.filter(x=>!x.future).length||1;
+  wk+=`<div class="card"><b>Week ${i/7+1}</b> <span class="sub">days ${w[0].d}–${w[w.length-1].d}</span><div class="grid" style="margin-top:8px">${stat("Study h",f1(sm(r=>r.study)))}${stat("Content h",f1(sm(r=>r.content)))}${stat("Running KM",f1(sm(r=>r.run)))}${stat("Business h",f1(sm(r=>r.biz)))}${stat("Avg score",Math.round(sm(r=>score(r))/el))}${stat("Scrolling min",sm(r=>r.scroll))}${stat("Target completion",Math.round(sm(r=>score(r))/el)+"%")}</div></div>`}
+ // report
+ const prev=monthStats(shift(-1)),H=S.hab,names={study:"Study",content:"Content",run:"Running",biz:"Business",scroll:"Low Scrolling"};
+ const hk=Object.keys(H).sort((a,b)=>H[b]-H[a]),good=hk.filter(k=>H[k]>=70),bad=hk.filter(k=>H[k]<70);
+ const verdict=!prev.L?"No previous month to compare against yet.":S.avgScore>prev.avgScore&&S.out>=prev.out?`✅ Improved: avg score ${prev.avgScore} → ${S.avgScore}, output hours ${f1(prev.out)} → ${f1(S.out)}.`:S.avgScore>prev.avgScore?`⚠️ Score up (${prev.avgScore} → ${S.avgScore}) but output hours down (${f1(prev.out)} → ${f1(S.out)}).`:`🔴 Not improved: avg score ${prev.avgScore} → ${S.avgScore}, output hours ${f1(prev.out)} → ${f1(S.out)}.`;
+ return `<div class="ctl"><button onclick="mon='${shift(-1)}';render()">‹</button><b style="flex:1;text-align:center">${nm}</b><button onclick="mon='${shift(1)}';render()">›</button></div>
+ <h2>Monthly Dashboard</h2><div class="grid">${stat("Total study h",f1(S.tot.study))}${stat("Avg study h/day",av(S.tot.study))}${stat("Total content h",f1(S.tot.content))}${stat("Avg content h/day",av(S.tot.content))}${stat("Total running KM",f1(S.tot.run))}${stat("Avg KM/day",av(S.tot.run))}${stat("Total business h",f1(S.tot.biz))}${stat("Avg business h/day",av(S.tot.biz))}${stat("Content ideas",S.tot.ideas)}${stat("Scrolling min",S.tot.scroll)}${stat("Avg scrolling/day",av(S.tot.scroll))}${stat("Time waste min",S.tot.waste)}${stat("Average daily score",S.avgScore)}${stat("Excellent days",S.exc)}${stat("Strong days",S.strong)}${stat("Missed days",S.missed)}${stat("Target achievement",S.tach+"%")}</div>
+ <div class="sub" style="margin-top:6px">Averages are per elapsed day, so unlogged days count against you.</div>
+ <h2>Habit completion</h2><div class="card bar">${hk.length?CAT.map(([k,n])=>`<div class="row"><span>${n.padEnd(0)}</span><span>${bar(H[k])} ${H[k]}%</span></div>`).join(""):""}</div>
+ <h2>Consistency</h2><div class="card"><div class="grid">${stat("Current streak",cs)}${stat("Longest streak (all time)",bs)}${stat("Days completed (≥70)",S.done)}${stat("Days missed",S.E-S.done)}</div><div class="cal" style="margin-top:10px">${cal}</div><div class="sub" style="margin-top:6px">🟢 75+ · 🟡 40–74 · 🔴 under 40 or not logged</div></div>
+ <h2>Weekly analysis</h2>${wk||'<div class="card sub">No data yet.</div>'}
+ <h2>End-of-month report</h2><div class="card"><b>Your Winter Arc — ${nm}</b><div class="row"><span>🔥 Overall score</span><span>${S.avgScore}/100</span></div><div class="row"><span>📚 Study</span><span>${f1(S.tot.study)}h · ${H.study}%</span></div><div class="row"><span>🎥 Content</span><span>${f1(S.tot.content)}h · ${H.content}%</span></div><div class="row"><span>🏃 Running</span><span>${f1(S.tot.run)} km · ${H.run}%</span></div><div class="row"><span>💼 Business</span><span>${f1(S.tot.biz)}h · ${H.biz}%</span></div><div class="row"><span>📱 Scrolling control</span><span>${S.tot.scroll} min · ${H.scroll}%</span></div><div class="row"><span>💡 Content creation</span><span>${S.tot.ideas} ideas</span></div><div class="row"><span>🔥 Consistency</span><span>${S.done}/${S.E} days</span></div>
+ <div class="row"><span>What I did well</span><span>${good.map(k=>names[k]).join(", ")||"—"}</span></div><div class="row"><span>What I need to improve</span><span>${bad.map(k=>names[k]).join(", ")||"—"}</span></div><div class="row"><span>Strongest habit</span><span>${S.L?names[hk[0]]:"—"}</span></div><div class="row"><span>Weakest habit</span><span>${S.L?names[hk[hk.length-1]]:"—"}</span></div><div class="row"><span>Total productive hours</span><span>${f1(S.out)}h</span></div><div class="row"><span>Total time wasted</span><span>${f1((S.tot.scroll+S.tot.waste)/60)}h</span></div><div class="row"><span>Days I stayed consistent</span><span>${S.done}</span></div><div class="row"><span>Longest streak (month)</span><span>${mstreak(S)}</span></div>
+ <div style="margin-top:10px"><b>Did I improve?</b><div class="sub">${verdict}</div></div></div>`}
+function render(){const v=$("#v");v.innerHTML=tab=="today"?viewToday():tab=="log"?viewLog():tab=="table"?viewTable():viewMonth();if(tab=="log")live();
+ document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.t==tab))}
+function go(t){tab=t;if(t!="log")sel=null;render();scrollTo(0,0)}
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{if(b.dataset.t=="log")sel=null;go(b.dataset.t)});
+init();
+if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script></body></html>
